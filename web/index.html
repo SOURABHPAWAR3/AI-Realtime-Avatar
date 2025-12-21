@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>AI Avatar Client</title>
+</head>
+
+<body>
+    <h1>AI Avatar</h1>
+    <button id="start">Start Mic</button>
+    <button id="stop">Stop Mic</button>
+    <pre id="log"></pre>
+    <script type="module">
+        import { startClient } from './audio.js'; const log = document.getElementById('log'); function append(s){ log.textContent += s + '\n'; } const client = startClient(`ws://${location.hostname}:3000`); document.getElementById('start').addEventListener('click',
+        async ()=>{ await client.startMic(); append('mic started'); }); document.getElementById('stop').addEventListener('click', ()=>{ client.stopMic(); append('mic stopped'); });
+    </script>
+</body>
+
+</html>
