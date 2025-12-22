@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { handleSTT } from "./stt.js";
 import { handleLLM } from "./llm.js";
-import { handleTTS } from "./tts.js";
+// TTS removed - browser handles speech via SpeechSynthesis
 
 export function setupWebSocket(server) {
     const wss = new WebSocketServer({ server });
@@ -69,21 +69,9 @@ export function setupWebSocket(server) {
                 const replyText = await handleLLM(userText);
                 console.log("🤖 AI reply:", replyText);
 
-                // STEP 3 — AI → Audio (ElevenLabs)
-                const audioPayloadBuffer = await handleTTS(replyText);
-
-                // Send AI text first
+                // Send AI text FIRST (browser handles TTS via SpeechSynthesis)
                 ws.send(JSON.stringify({ type: "ai_text", text: replyText }));
-
-                // Then send audio as Base64 for browser playback
-                if (audioPayloadBuffer) {
-                    ws.send(
-                        JSON.stringify({
-                            type: "ai_audio",
-                            audio: audioPayloadBuffer.toString("base64"),
-                        })
-                    );
-                }
+                console.log("📤 Sent ai_text to browser");
             } catch (err) {
                 // Log full error details for debugging
                 const errorDetails = err.statusCode 
@@ -98,13 +86,12 @@ export function setupWebSocket(server) {
                 try {
                     // Send user-friendly error message
                     const userMessage = err.statusCode === 403 
-                        ? "TTS service authentication failed. Please check API configuration."
+                        ? "API authentication failed. Please check configuration."
                         : err.message || "An error occurred while processing audio";
                     
                     ws.send(JSON.stringify({ 
                         type: "error", 
-                        message: userMessage,
-                        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+                        message: userMessage
                     }));
                 } catch (e) {
                     console.error("   Failed to send error to client:", e.message);
@@ -221,17 +208,10 @@ export function setupWebSocket(server) {
                             
                             const userText = await handleSTT(validChunks);
                             const replyText = await handleLLM(userText);
-                            const audioPayloadBuffer = await handleTTS(replyText);
 
                             try {
+                                // Send text only - browser handles TTS
                                 ws.send(JSON.stringify({ type: "ai_text", text: replyText }));
-                                if (audioPayloadBuffer)
-                                    ws.send(
-                                        JSON.stringify({
-                                            type: "ai_audio",
-                                            audio: audioPayloadBuffer.toString("base64"),
-                                        })
-                                    );
                             } catch (e) {}
                         } catch (e) {
                             // ignore errors during disconnect
