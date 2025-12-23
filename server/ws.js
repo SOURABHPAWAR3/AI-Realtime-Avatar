@@ -1,7 +1,7 @@
 import WebSocket, { WebSocketServer } from "ws";
 import { handleSTT } from "./stt.js";
 import { handleLLM } from "./llm.js";
-import { handleTTS } from "./tts.js";
+// TTS removed - browser handles speech via SpeechSynthesis
 
 export function setupWebSocket(server) {
     const wss = new WebSocketServer({ server });
@@ -29,13 +29,13 @@ export function setupWebSocket(server) {
 
             const chunks = ws._audioChunks || [];
             ws._audioChunks = [];
-            
+
             // Validate chunks before processing
             if (!chunks.length) {
                 console.log("⚠ No audio chunks to process");
                 return;
             }
-            
+
             // Filter out invalid chunks (too small or null)
             const validChunks = chunks.filter(chunk => {
                 if (!chunk || !Buffer.isBuffer(chunk)) return false;
@@ -45,12 +45,12 @@ export function setupWebSocket(server) {
                 }
                 return true;
             });
-            
+
             if (!validChunks.length) {
                 console.log("⚠ No valid audio chunks after filtering");
                 return;
             }
-            
+
             // If we filtered out chunks, log it
             if (validChunks.length < chunks.length) {
                 console.log(`⚠ Filtered ${chunks.length - validChunks.length} invalid chunks, processing ${validChunks.length} valid chunks`);
@@ -69,42 +69,29 @@ export function setupWebSocket(server) {
                 const replyText = await handleLLM(userText);
                 console.log("🤖 AI reply:", replyText);
 
-                // STEP 3 — AI → Audio (ElevenLabs)
-                const audioPayloadBuffer = await handleTTS(replyText);
-
-                // Send AI text first
+                // Send AI text FIRST (browser handles TTS via SpeechSynthesis)
                 ws.send(JSON.stringify({ type: "ai_text", text: replyText }));
-
-                // Then send audio as Base64 for browser playback
-                if (audioPayloadBuffer) {
-                    ws.send(
-                        JSON.stringify({
-                            type: "ai_audio",
-                            audio: audioPayloadBuffer.toString("base64"),
-                        })
-                    );
-                }
+                console.log("📤 Sent ai_text to browser");
             } catch (err) {
                 // Log full error details for debugging
-                const errorDetails = err.statusCode 
-                    ? `Status code: ${err.statusCode}\n${err.message}` 
-                    : err.message;
-                
+                const errorDetails = err.statusCode ?
+                    `Status code: ${err.statusCode}\n${err.message}` :
+                    err.message;
+
                 console.error("❌ Error processing audio:", errorDetails);
                 if (err.cause) {
                     console.error("   Caused by:", err.cause.message || err.cause);
                 }
-                
+
                 try {
                     // Send user-friendly error message
-                    const userMessage = err.statusCode === 403 
-                        ? "TTS service authentication failed. Please check API configuration."
-                        : err.message || "An error occurred while processing audio";
-                    
-                    ws.send(JSON.stringify({ 
-                        type: "error", 
-                        message: userMessage,
-                        details: process.env.NODE_ENV === 'development' ? errorDetails : undefined
+                    const userMessage = err.statusCode === 403 ?
+                        "API authentication failed. Please check configuration." :
+                        err.message || "An error occurred while processing audio";
+
+                    ws.send(JSON.stringify({
+                        type: "error",
+                        message: userMessage
                     }));
                 } catch (e) {
                     console.error("   Failed to send error to client:", e.message);
@@ -169,12 +156,12 @@ export function setupWebSocket(server) {
                             // Check for WebM/Matroska element IDs
                             const firstByte = chunk[0];
                             return firstByte === 0x1a || // EBML
-                                   firstByte === 0x45 || // Partial EBML
-                                   firstByte === 0x43 || // Cluster
-                                   firstByte === 0x1f || // BlockGroup
-                                   (firstByte >= 0x80 && firstByte <= 0xFE); // Matroska element range
+                                firstByte === 0x45 || // Partial EBML
+                                firstByte === 0x43 || // Cluster
+                                firstByte === 0x1f || // BlockGroup
+                                (firstByte >= 0x80 && firstByte <= 0xFE); // Matroska element range
                         });
-                        
+
                         if (!hasStructure && remainingChunks.length < 3) {
                             console.warn("⚠ Remaining chunks after audio_end are likely fragments without structure, skipping...");
                             ws._audioChunks = []; // Clear them
@@ -207,31 +194,24 @@ export function setupWebSocket(server) {
                         try {
                             const chunks = ws._audioChunks;
                             ws._audioChunks = [];
-                            
+
                             // Validate chunks before processing on disconnect
                             const validChunks = chunks.filter(chunk => {
                                 if (!chunk || !Buffer.isBuffer(chunk)) return false;
                                 return chunk.length >= 50;
                             });
-                            
+
                             if (!validChunks.length) {
                                 console.log("⚠ No valid chunks to process on disconnect");
                                 return;
                             }
-                            
+
                             const userText = await handleSTT(validChunks);
                             const replyText = await handleLLM(userText);
-                            const audioPayloadBuffer = await handleTTS(replyText);
 
                             try {
+                                // Send text only - browser handles TTS
                                 ws.send(JSON.stringify({ type: "ai_text", text: replyText }));
-                                if (audioPayloadBuffer)
-                                    ws.send(
-                                        JSON.stringify({
-                                            type: "ai_audio",
-                                            audio: audioPayloadBuffer.toString("base64"),
-                                        })
-                                    );
                             } catch (e) {}
                         } catch (e) {
                             // ignore errors during disconnect

@@ -1,39 +1,71 @@
 // web/audio.js
-// Handles microphone streaming + AI audio playback
+// Browser TTS (SpeechSynthesis) + Mic streaming to server
 
 import { createSocket } from './socket.js';
 
 /* =========================
-   🔊 AI AUDIO PLAYBACK
+   🔊 BROWSER TTS (SpeechSynthesis)
 ========================= */
 
-function playAIAudio(base64Audio) {
-    const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+let speaking = false;
 
-    audio.onplay = () => console.log('🔊 Playing AI audio');
-    audio.onerror = (e) => console.error('❌ Audio playback error', e);
+function speak(text) {
+    if (!text) return;
 
-    audio.play().catch(err => {
-        console.error('❌ Autoplay blocked:', err);
-    });
+    // Stop previous speech if any
+    if (speaking) {
+        window.speechSynthesis.cancel();
+        speaking = false;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    utterance.onstart = () => {
+        speaking = true;
+        console.log('🔊 Speaking...');
+    };
+
+    utterance.onend = () => {
+        speaking = false;
+        console.log('✅ Speech finished');
+    };
+
+    utterance.onerror = (e) => {
+        speaking = false;
+        console.error('❌ Speech error:', e.error);
+    };
+
+    window.speechSynthesis.speak(utterance);
 }
 
 /* =========================
    🎤 MIC STREAMING CLIENT
 ========================= */
 
-export function startClient(wsUrl) {
+export function startClient(wsUrl, avatarInstance) {
     const ws = createSocket(wsUrl, (msg) => {
         console.log('📩 WS message:', msg);
 
-        // 🔥 AI AUDIO COMES HERE
-        if (msg.type === 'ai_audio' && msg.audio) {
-            playAIAudio(msg.audio);
+        // 🔥 SERVER TEXT RESPONSE
+        if (msg.type === 'ai_text') {
+            const reply = msg.text;
+
+            // 1️⃣ Speak via browser SpeechSynthesis
+            speak(reply);
+
+            // 2️⃣ Send text to HeyGen Avatar (if available)
+            if (avatarInstance && typeof avatarInstance.sendMessage === 'function') {
+                avatarInstance.sendMessage(reply);
+            }
         }
 
-        // Optional text logging
-        if (msg.type === 'ai_text') {
-            console.log('🤖 AI:', msg.text);
+        // Handle errors from server
+        if (msg.type === 'error') {
+            console.error('❌ Server error:', msg.message);
         }
     });
 
