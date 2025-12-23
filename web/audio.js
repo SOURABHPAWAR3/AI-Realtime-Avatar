@@ -54,12 +54,12 @@ export function startClient(wsUrl, avatarInstance) {
         if (msg.type === 'ai_text') {
             const reply = msg.text;
 
-            // 1️⃣ Speak via browser SpeechSynthesis
-            speak(reply);
-
-            // 2️⃣ Send text to HeyGen Avatar (if available)
-            if (avatarInstance && typeof avatarInstance.sendMessage === 'function') {
-                avatarInstance.sendMessage(reply);
+            // Send text to HeyGen Avatar to speak (if available)
+            if (avatarInstance && typeof avatarInstance.speak === 'function') {
+                avatarInstance.speak({ text: reply });
+            } else {
+                // Fallback to browser SpeechSynthesis
+                speak(reply);
             }
         }
 

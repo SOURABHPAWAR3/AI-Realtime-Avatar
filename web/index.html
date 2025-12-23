@@ -1,19 +1,87 @@
 <!doctype html>
-<html>
+<html lang="en">
 
 <head>
     <meta charset="utf-8" />
-    <title>AI Avatar Client</title>
+    <title>AI Avatar Call</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        h1 {
+            margin-bottom: 16px;
+        }
+        
+        #avatar {
+            width: 320px;
+            height: 350px;
+            background: #000;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        
+        button {
+            padding: 10px 16px;
+            margin-right: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        #log {
+            margin-top: 16px;
+            background: #fff;
+            padding: 10px;
+            height: 120px;
+            overflow-y: auto;
+            border-radius: 6px;
+        }
+    </style>
 </head>
 
 <body>
-    <h1>AI Avatar</h1>
-    <button id="start">Start Mic</button>
-    <button id="stop">Stop Mic</button>
+    <h1>AI Avatar – Live Call</h1>
+
+    <div id="avatar"></div>
+
+    <button id="start">🎤 Start Talking</button>
+    <button id="stop">🛑 Stop</button>
+
     <pre id="log"></pre>
+
     <script type="module">
-        import { startClient } from './audio.js'; const log = document.getElementById('log'); function append(s){ log.textContent += s + '\n'; } const client = startClient(`ws://${location.hostname}:3000`); document.getElementById('start').addEventListener('click',
-        async ()=>{ await client.startMic(); append('mic started'); }); document.getElementById('stop').addEventListener('click', ()=>{ client.stopMic(); append('mic stopped'); });
+        import { initAvatar } from "./avatar.js";
+        import { startClient } from "./audio.js";
+
+        const log = document.getElementById("log");
+        const avatarContainer = document.getElementById("avatar");
+        const startBtn = document.getElementById("start");
+        const stopBtn = document.getElementById("stop");
+
+        function append(message) {
+            log.textContent += message + "\n";
+            log.scrollTop = log.scrollHeight;
+        }
+
+        async function init() {
+            const avatar = await initAvatar(avatarContainer);
+            const client = startClient(`ws://${location.hostname}:3000`, avatar);
+
+            startBtn.onclick = async () => {
+                await client.startMic();
+                append("🎤 Mic started");
+            };
+
+            stopBtn.onclick = () => {
+                client.stopMic();
+                append("🛑 Mic stopped");
+            };
+        }
+
+        init();
     </script>
 </body>
 
